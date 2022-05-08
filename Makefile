@@ -2,22 +2,36 @@
 build: build_dir build/sbin/init build/bin/sh \
 	build/bin/ls build/bin/mount build/bin/headc
 
+.PHONY: vmdk
+vmdk: build
+	sudo mount /dev/loop0p1 /home/matt/newsys; \
+		sudo cp -R /home/matt/yip_linux/build/* /home/matt/newsys; \
+		sudo umount /home/matt/newsys; \
+		qemu-img convert -f raw -O vmdk /home/matt/disk.raw \
+		/mnt/hgfs/matt/Documents/Virtual\ Machines/Yip/Yip.vmdk
+
+.PHONY: clean
+clean:
+	rm -rf build
+
+.PHONY: build_dir
 build_dir:
-	mkdir -p build
-	mkdir -p build/bin
-	mkdir -p build/sbin
+	mkdir -p build/bin build/dev build/proc build/run \
+		build/sbin build/sys
 
-build/sbin/init: build_dir init.c
-	cc -o build/sbin/init init.c --static
+CC=musl-gcc
 
-build/bin/sh: build_dir sh.c
-	cc -o build/bin/sh sh.c --static
+build/sbin/init: init.c
+	$(CC) -o build/sbin/init init.c --static
 
-build/bin/ls: build_dir ls.c
-	cc -o build/bin/ls ls.c --static
+build/bin/sh: sh.c
+	$(CC) -o build/bin/sh sh.c --static
 
-build/bin/mount: build_dir mount.c
-	cc -o build/bin/mount mount.c --static
+build/bin/ls: ls.c
+	$(CC) -o build/bin/ls ls.c --static
 
-build/bin/headc: build_dir headc.c
-	cc -o build/bin/headc headc.c --static
+build/bin/mount: mount.c
+	$(CC) -o build/bin/mount mount.c --static
+
+build/bin/headc: headc.c
+	$(CC) -o build/bin/headc headc.c --static
