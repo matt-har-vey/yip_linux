@@ -1,17 +1,25 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
-
-#include <linux/reboot.h>
 
 #include <sys/mount.h>
 #include <sys/reboot.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#define REBOOT_CMD_HALT 0xcdef0123
+#define REBOOT_CMD_POWEROFF 0x4321fedc
+
 int main(int argc, char **argv) {
-  mount("proc", "/proc", "proc", 0, NULL);
-  mount("sysfs", "/sys", "sysfs", 0, NULL);
-  mount("tmpfs", "/run", "tmpfs", 0, NULL);
+  if (mount("proc", "/proc", "proc", 0, NULL) == -1) {
+    perror("mount proc");
+  }
+  if (mount("sysfs", "/sys", "sysfs", 0, NULL) == -1) {
+    perror("mount sys");
+  }
+  if (mount("tmpfs", "/run", "tmpfs", 0, NULL) == 1) {
+    perror("mount run");
+  }
 
   pid_t pid = fork();
   if (pid == 0) {
@@ -23,10 +31,11 @@ int main(int argc, char **argv) {
     sync();
     if (umount("/") != 0) {
       perror("umount");
-      sleep(5);
     }
-    if (reboot(LINUX_REBOOT_CMD_POWER_OFF) != 0) {
-      perror("reboot");
+    if (getenv("YIP_NOREBOOT") == NULL) {
+      if (reboot(REBOOT_CMD_POWEROFF) != 0) {
+        perror("reboot");
+      }
     }
   }
   return -1;
