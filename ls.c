@@ -16,9 +16,10 @@ int main(int argc, char **argv) {
 
   for (struct dirent *entry = readdir(dir); entry != NULL;
        entry = readdir(dir)) {
-    printf("%s\n", entry->d_name);
+    printf("%s\t", entry->d_name);
   }
 
   closedir(dir);
+  printf("\n");
   return 0;
 }
