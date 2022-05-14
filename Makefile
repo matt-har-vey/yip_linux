@@ -1,6 +1,6 @@
 .PHONY: build
 build: build_dir build/sbin/init build/bin/sh \
-	build/bin/ls build/bin/mount build/bin/headc
+	build/bin/mount
 
 .PHONY: vmdk
 vmdk: build
@@ -27,11 +27,5 @@ build/sbin/init: init.c
 build/bin/sh: sh.c
 	$(CC) -o build/bin/sh sh.c --static
 
-build/bin/ls: ls.c
-	$(CC) -o build/bin/ls ls.c --static
-
 build/bin/mount: mount.c
 	$(CC) -o build/bin/mount mount.c --static
-
-build/bin/headc: headc.c
-	$(CC) -o build/bin/headc headc.c --static

@@ -42,6 +42,7 @@ void run_line(char *cmdline) {
 int main(int argc, char **argv) {
   while (1) {
     printf("$ ");
+    fflush(stdout);
     char cmdline[CMDLINE_LIMIT];
     memset(cmdline, 0, sizeof(cmdline));
     size_t pos = 0;
