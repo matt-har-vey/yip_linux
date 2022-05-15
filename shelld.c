@@ -16,6 +16,10 @@
 
 #define BUF_SIZE 1024
 
+#define UID 100
+#define GID 1000
+#define HOMEDIR "/home/bellatrix"
+
 void set_nonblocking(int fd) {
   int flags = fcntl(fd, F_GETFL);
   flags |= O_NONBLOCK;
@@ -37,10 +41,21 @@ int handle_connection(int conn_fd) {
   }
 
   int target_fd = -1;
-  const pid_t cpid = forkpty(&target_fd, NULL, NULL, NULL);
-  if (cpid == 0) {
-    exec_shell(getuid(), getgid(), getenv("HOME"));
+  char* pty_name = (char*)malloc(BUF_SIZE);
+  memset(pty_name, 0, BUF_SIZE);
+  const pid_t cpid = forkpty(&target_fd, pty_name, NULL, NULL);
+  if (cpid == -1) {
+    free(pty_name);
+    perror("forkpty");
+    return -1;
   }
+  if (cpid == 0) {
+    free(pty_name);
+    close(conn_fd);
+    exec_shell(UID, GID, HOMEDIR);
+    fprintf(stderr, "unexpected return from exec_shell\n");
+  }
+  free(pty_name);
 
   struct pollfd poll_fds[2];
   memset(poll_fds, 0, sizeof(poll_fds));
@@ -145,8 +160,6 @@ int main(int argc, char** argv) {
     return -1;
   }
 
-  printf("listening\n");
-
   err = 0;
   while (!err) {
     int conn_fd = accept(sock_fd, NULL, NULL);
@@ -161,12 +174,10 @@ int main(int argc, char** argv) {
       close(conn_fd);
       break;
     } else {
-      printf("forked %d\n", conn_pid);
       close(conn_fd);
     }
   }
 
   close(sock_fd);
-
   return err;
 }
