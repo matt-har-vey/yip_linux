@@ -12,28 +12,14 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "exec_shell.h"
+
 #define HOSTNAME "paddock"
 
 #define REBOOT_CMD_HALT 0xcdef0123
 #define REBOOT_CMD_POWEROFF 0x4321fedc
 
 #define LOGIN_TTY "/dev/ttyS0"
-
-void exec_shell(int uid, int gid, const char* home_dir) {
-  setsid();
-  setgid(gid);
-  setuid(uid);
-  setenv("HOME", home_dir, 1);
-  chdir(home_dir);
-  const char bin_sh[] = "/bin/sh";
-  const char zsh[] = "/usr/local/bin/zsh";
-  struct stat statbuf;
-  if (stat(zsh, &statbuf) == 0) {
-    execl(zsh, zsh, (char *)NULL);
-  } else {
-    execl(bin_sh, bin_sh, (char *)NULL);
-  }
-}
 
 void serial_login() {
   prctl(PR_SET_NAME, (unsigned long)"serial_login", 0, 0, 0);

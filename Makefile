@@ -1,6 +1,6 @@
 .PHONY: build
 build: build_dir build/sbin/init build/bin/sh \
-	build/bin/mount
+	build/bin/mount build/sbin/shelld
 
 .PHONY: vmdk
 vmdk: build
@@ -13,6 +13,7 @@ vmdk: build
 .PHONY: clean
 clean:
 	rm -rf build
+	rm *.o
 
 .PHONY: build_dir
 build_dir:
@@ -21,8 +22,14 @@ build_dir:
 
 CC=musl-gcc
 
-build/sbin/init: init.c
-	$(CC) -o build/sbin/init init.c --static
+exec_shell.o: exec_shell.h exec_shell.c
+	$(CC) -o exec_shell.o -c exec_shell.c
+
+build/sbin/init: init.c exec_shell.o
+	$(CC) -o build/sbin/init init.c exec_shell.o --static
+
+build/sbin/shelld: shelld.c exec_shell.o
+	$(CC) -o build/sbin/shelld shelld.c exec_shell.o --static
 
 build/bin/sh: sh.c
 	$(CC) -o build/bin/sh sh.c --static
