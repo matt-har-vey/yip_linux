@@ -44,7 +44,7 @@ int run_line(char *cmdline) {
   }
 }
 
-size_t read_line(FILE* file, char* buf, size_t limit) {
+size_t read_line(FILE *file, char *buf, size_t limit) {
   size_t pos = 0;
   while (1) {
     char c = getc(file);
@@ -63,7 +63,7 @@ size_t read_line(FILE* file, char* buf, size_t limit) {
   }
 }
 
-int run_session(FILE* input, bool interactive) {
+int run_session(FILE *input, bool interactive) {
   int status = 0;
   while (1) {
     if (interactive) {
@@ -87,8 +87,8 @@ int run_session(FILE* input, bool interactive) {
   }
 }
 
-int run_script(const char* filename) {
-  FILE* file = fopen(filename, "r");
+int run_script(const char *filename) {
+  FILE *file = fopen(filename, "r");
   if (file == NULL) {
     perror("fopen");
     return errno;

@@ -23,7 +23,7 @@
 
 #define LOGIN_TTY "/dev/ttyS0"
 
-void panic(const char* context) {
+void panic(const char *context) {
   fprintf(stderr, "init panic (context=\"%s\", errno=%d)", context, errno);
   while (1) {
     sleep(10);
@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
     if (wstatus != 0) {
       fprintf(stderr, "start_net failed with status %d\n", wstatus);
     }
-  } 
+  }
 
   pid = fork();
   if (pid == 0) {

@@ -35,13 +35,13 @@ void wait_to_write(int fd) {
 }
 
 int handle_connection(int conn_fd) {
-  void* buf = malloc(BUF_SIZE); 
+  void *buf = malloc(BUF_SIZE);
   if (buf == NULL) {
     return -1;
   }
 
   int target_fd = -1;
-  char* pty_name = (char*)malloc(BUF_SIZE);
+  char *pty_name = (char *)malloc(BUF_SIZE);
   memset(pty_name, 0, BUF_SIZE);
   const pid_t cpid = forkpty(&target_fd, pty_name, NULL, NULL);
   if (cpid == -1) {
@@ -105,11 +105,11 @@ int handle_connection(int conn_fd) {
   return 0;
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   // Reaps zombie closed connection handlers.
   if (signal(SIGCHLD, SIG_IGN) == SIG_ERR) {
-      perror("signal");
-      return -1;
+    perror("signal");
+    return -1;
   }
 
   int err = 0;
@@ -147,7 +147,7 @@ int main(int argc, char** argv) {
   }
 
   freeaddrinfo(result);
-  
+
   if (addr == NULL) {
     perror("bind");
     return -1;

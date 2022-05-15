@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-void exec_shell(int uid, int gid, const char* home_dir) {
+void exec_shell(int uid, int gid, const char *home_dir) {
   setsid();
   setgid(gid);
   setuid(uid);

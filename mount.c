@@ -2,11 +2,11 @@
 
 #include <sys/mount.h>
 
-int main(int argc, char** argv) {
-  char* source = NULL;
-  char* target = NULL;
-  char* filesystemtype = NULL;
-  char* data = NULL;
+int main(int argc, char **argv) {
+  char *source = NULL;
+  char *target = NULL;
+  char *filesystemtype = NULL;
+  char *data = NULL;
   if (argc > 1) {
     source = argv[1];
   }
