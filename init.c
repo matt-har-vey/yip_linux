@@ -32,10 +32,11 @@ void panic(const char *context) {
 }
 
 void shutdown() {
-  sync();
   if (umount("/") != 0) {
     panic("umount /");
   }
+  sync();
+
   if (getenv("YIP_NOREBOOT") == NULL) {
     if (reboot(REBOOT_CMD_POWEROFF) != 0) {
       panic("reboot");
@@ -116,7 +117,7 @@ int main(int argc, char **argv) {
   if (pid == 0) {
     execl("/bin/sh", "/bin/sh", "/etc/start_net", NULL);
   } else {
-    int wstatus;
+    int wstatus = 0;
     waitpid(pid, &wstatus, 0);
     if (wstatus != 0) {
       fprintf(stderr, "start_net failed with status %d\n", wstatus);
