@@ -32,6 +32,10 @@ void panic(const char *context) {
 }
 
 void shutdown() {
+  kill(-1, SIGTERM);
+  sleep(2);
+  kill(-1, SIGQUIT);
+
   if (umount("/") != 0) {
     panic("umount /");
   }
