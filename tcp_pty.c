@@ -1,5 +1,8 @@
 #include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
+#include <poll.h>
+#include <pty.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -9,7 +12,7 @@
 
 #include <sys/socket.h>
 
-#include "user_session.h"
+#define BUF_SIZE 4096
 
 static int resolve_and_bind(const char *address, const char *protocol) {
   struct addrinfo hints;
@@ -52,10 +55,71 @@ static int resolve_and_bind(const char *address, const char *protocol) {
   return sock_fd;
 }
 
-int main(int argc, char **argv) {
-  if (argc < 3) {
-    fprintf(stderr, "usage: tcp_pty <address> <port>\n");
+static void set_nonblocking(int fd) {
+  int flags = fcntl(fd, F_GETFL);
+  flags |= O_NONBLOCK;
+  fcntl(fd, F_SETFL, flags);
+}
+
+static void wait_to_write(int fd) {
+  struct pollfd poll_fd;
+  memset(&poll_fd, 0, sizeof(struct pollfd));
+  poll_fd.fd = fd;
+  poll_fd.events = POLLOUT;
+  poll(&poll_fd, 1, -1);
+}
+
+static int bridge_fds(int fd_0, int fd_1) {
+  const int closed_flags = POLLNVAL | POLLERR | POLLHUP;
+  struct pollfd poll_fds[2];
+  memset(poll_fds, 0, sizeof(poll_fds));
+  poll_fds[0].fd = fd_0;
+  poll_fds[0].events = POLLIN;
+  poll_fds[1].fd = fd_1;
+  poll_fds[1].events = POLLIN;
+  set_nonblocking(fd_0);
+  set_nonblocking(fd_1);
+
+  void *buf = malloc(BUF_SIZE);
+  if (buf == NULL) {
+    return -1;
   }
+  while (1) {
+    if (poll(poll_fds, 2, -1) == -1) {
+      break;
+    }
+    if ((poll_fds[0].revents & closed_flags) ||
+        (poll_fds[1].revents & closed_flags)) {
+      break;
+    }
+    if (poll_fds[0].revents & POLLIN) {
+      const ssize_t num_read = read(fd_0, buf, BUF_SIZE);
+      if (num_read == 0) {
+        break;
+      }
+      wait_to_write(fd_1);
+      if (write(fd_1, buf, num_read) != num_read) {
+        break;
+      }
+    }
+    if (poll_fds[1].revents & POLLIN) {
+      const ssize_t num_read = read(fd_1, buf, BUF_SIZE);
+      if (num_read == 0) {
+        break;
+      }
+      wait_to_write(fd_0);
+      if (write(fd_0, buf, num_read) != num_read) {
+        break;
+      }
+    }
+  }
+  free(buf);
+  return 0;
+}
+
+int main(int argc, char **argv) {
+  const char kHost[] = "0.0.0.0";
+  const char kPort[] = "8888";
 
   // Reaps zombie closed connection handlers.
   if (signal(SIGCHLD, SIG_IGN) == SIG_ERR) {
@@ -63,7 +127,7 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  int sock_fd = resolve_and_bind(argv[1], argv[2]);
+  int sock_fd = resolve_and_bind(kHost, kPort);
   if (sock_fd == -1) {
     fprintf(stderr, "bind failed\n");
     return -1;
@@ -83,12 +147,19 @@ int main(int argc, char **argv) {
       perror("accept");
       continue;
     }
-    if (fork() == 0) {
-      close(sock_fd);
-      user_session(conn_fd);
+
+    int tty_fd = -1;
+    char pty_path[16];
+    memset(pty_path, 0, sizeof(pty_path));
+    const pid_t cpid = forkpty(&tty_fd, pty_path, NULL, NULL);
+    if (cpid == 0) {
       close(conn_fd);
-      break;
+      execl("/usr/bin/login", "login", NULL);
+    } else if (cpid > 0) {
+      bridge_fds(tty_fd, conn_fd);
+      close(tty_fd);
     }
+
     close(conn_fd);
   }
 

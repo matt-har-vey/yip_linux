@@ -1,6 +1,6 @@
 .PHONY: build
 build: build_dir build/usr/sbin/init build/bin/sh \
-	build/usr/sbin/tcp_pty
+	build/usr/sbin/tcp_pty build/usr/bin/login
 
 .PHONY: rawdisk
 rawdisk: build
@@ -11,24 +11,23 @@ rawdisk: build
 
 .PHONY: clean
 clean:
-	rm -rf build
-	rm *.o
+	rm -rf build *.o
 
 .PHONY: build_dir
 build_dir:
 	mkdir -p build/bin build/dev build/proc build/run \
-		build/usr/sbin build/sys
+		build/usr/bin build/usr/sbin build/sys
 
 CC=musl-gcc
 
-user_session.o: user_session.h user_session.c
-	$(CC) -o user_session.o -c user_session.c
+build/usr/sbin/init: init.c
+	$(CC) -o build/usr/sbin/init init.c
 
-build/usr/sbin/init: init.c user_session.o
-	$(CC) -o build/usr/sbin/init init.c user_session.o --static
+build/usr/sbin/tcp_pty: tcp_pty.c
+	$(CC) -o build/usr/sbin/tcp_pty tcp_pty.c
 
-build/usr/sbin/tcp_pty: tcp_pty.c user_session.o
-	$(CC) -o build/usr/sbin/tcp_pty tcp_pty.c user_session.o --static
+build/usr/bin/login: login.c
+	$(CC) -o build/usr/bin/login login.c
 
 build/bin/sh: sh.c
-	$(CC) -o build/bin/sh sh.c --static
+	$(CC) -o build/bin/sh sh.c

@@ -14,8 +14,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "user_session.h"
-
 #define HOSTNAME "paddock"
 
 #define REBOOT_CMD_HALT 0xcdef0123
@@ -115,14 +113,27 @@ void signal_handler(int sig_num) {
 
 int console_login() {
   int fd = open(CONTROL_TTY, O_RDWR | O_SYNC);
-  return user_session(fd);
+  const pid_t pid = fork();
+  if (pid == 0) {
+    close(0);
+    close(1);
+    close(2);
+    dup(fd);
+    dup(fd);
+    dup(fd);
+    execl("/usr/bin/login", "login", NULL);
+  } else {
+    int status = -1;
+    waitpid(pid, &status, 0);
+    return status;
+  }
 }
 
 int main(int argc, char **argv) {
   startup();
 
   if (fork() == 0) {
-    execl("/usr/sbin/tcp_pty", "tcp_pty", "0.0.0.0", "8888", NULL);
+    execl("/usr/sbin/tcp_pty", "tcp_pty", NULL);
     perror("exec tcp_pty");
     return -1;
   }
