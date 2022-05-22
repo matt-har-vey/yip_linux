@@ -14,7 +14,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "exec_shell.h"
+#include "user_session.h"
 
 #define HOSTNAME "paddock"
 
@@ -25,11 +25,62 @@
 #define CONSOLE_TTY "/dev/hvc1"
 #define SERIAL_TTY "/dev/ttyS0"
 
+struct mount_spec {
+  const char *source;
+  const char *target;
+  const char *type;
+};
+
+static const struct mount_spec specs[] = {
+    {.source = "tmpfs", .target = "/tmp", .type = "tmpfs"},
+    {.source = "tmpfs", .target = "/run", .type = "tmpfs"},
+    {.source = "proc", .target = "/proc", .type = "proc"},
+    {.source = "sysfs", .target = "/sys", .type = "sysfs"},
+    {.source = "devpts", .target = "/dev/pts", .type = "devpts"},
+    {.source = NULL, .target = NULL, .type = NULL}};
+
+void signal_handler(int sig_num);
+
 void panic(const char *context) {
   fprintf(stderr, "init panic (context=\"%s\", errno=%d)\n", context, errno);
   perror("init panic");
   while (1) {
     sleep(10);
+  }
+}
+
+void startup() {
+  if (signal(SIGCHLD, SIG_IGN) == SIG_ERR) {
+    panic("installing SIGCHLD");
+  }
+  if (signal(SIGTERM, signal_handler) == SIG_ERR) {
+    panic("installing SIGTERM");
+  }
+
+  sethostname(HOSTNAME, strlen(HOSTNAME));
+
+  mkdir("/dev/pts", 0755);
+  for (const struct mount_spec *spec = specs; spec->target != NULL; ++spec) {
+    if (mount(spec->source, spec->target, spec->type, 0, NULL) == -1) {
+      fprintf(stderr, "mount(%s, %s, %s, 0, NULL)\n", spec->source,
+              spec->target, spec->type);
+      panic("mount");
+    }
+  }
+  if (mount(NULL, "/", NULL, MS_REMOUNT, NULL) == -1) {
+    panic("remounting /");
+  }
+  chmod("/tmp", 0777);
+
+  pid_t pid = fork();
+  if (pid == 0) {
+    execl("/bin/sh", "/bin/sh", "/etc/start_net", NULL);
+  } else {
+    int wstatus = 0;
+    waitpid(pid, &wstatus, 0);
+    if (wstatus != 0) {
+      fprintf(stderr, "start_net failed with status %d\n", wstatus);
+    }
   }
 }
 
@@ -41,10 +92,15 @@ void shutdown() {
   if (umount("/") != 0) {
     panic("umount /");
   }
+  for (const struct mount_spec *spec = specs; spec->target != NULL; ++spec) {
+    if (umount(spec->target) != 0) {
+      panic("umount spec");
+    }
+  }
   sync();
 
   if (getenv("YIP_NOREBOOT") == NULL) {
-    if (reboot(REBOOT_CMD_POWEROFF) != 0) {
+    if (reboot(REBOOT_CMD_HALT) != 0) {
       panic("reboot");
     }
   }
@@ -57,104 +113,23 @@ void signal_handler(int sig_num) {
   }
 }
 
-int serial_login() {
-  prctl(PR_SET_NAME, (unsigned long)"serial_login", 0, 0, 0);
-  int fd = open(SERIAL_TTY, O_RDWR);
-  if (fd == -1) {
-    return -1;
-  }
-  if (write(fd, "\r\n", 2) == -1) {
-    return -1;
-  }
-  pid_t pid = fork();
-  if (pid == 0) {
-    int login_result = login_tty(fd);
-    if (login_result == -1) {
-      return -1;
-    }
-    while (1) {
-      pid = fork();
-      if (pid == 0) {
-        exec_shell(100, 1000, "/home/bellatrix");
-      } else {
-        int wstatus = 0;
-        waitpid(pid, &wstatus, 0);
-      }
-    }
-  } else {
-    int wstatus = 0;
-    waitpid(pid, &wstatus, 0);
-    return wstatus;
-  }
-}
-
-void system_control() {
-  pid_t pid = fork();
-  if (pid == 0) {
-    int fd = open(CONTROL_TTY, O_RDWR);
-    login_tty(fd);
-    exec_shell(0, 0, "/root");
-  } else {
-    int wstatus = 0;
-    waitpid(pid, &wstatus, 0);
-  }
+int console_login() {
+  int fd = open(CONTROL_TTY, O_RDWR | O_SYNC);
+  return user_session(fd);
 }
 
 int main(int argc, char **argv) {
-  if (signal(SIGCHLD, SIG_IGN) == SIG_ERR) {
-    panic("installing SIGCHLD");
-  }
-  if (signal(SIGTERM, signal_handler) == SIG_ERR) {
-    panic("installing SIGTERM");
-  }
+  startup();
 
-  sethostname(HOSTNAME, strlen(HOSTNAME));
-
-  if (mount("proc", "/proc", "proc", 0, NULL) == -1) {
-    panic("mount /proc");
-  }
-  if (mount("sysfs", "/sys", "sysfs", 0, NULL) == -1) {
-    panic("mount /sys");
-  }
-  if (mount("tmpfs", "/run", "tmpfs", 0, NULL) == -1) {
-    panic("mount /run");
-  }
-  if (mount("tmpfs", "/tmp", "tmpfs", 0, NULL) == -1) {
-    panic("mount /tmp");
-  }
-  chmod("/tmp", 0777);
-  mkdir("/dev/pts", 0755);
-  if (mount("devpts", "/dev/pts", "devpts", 0, NULL) == -1) {
-    panic("mount /dev/pts");
-  }
-  if (mount("/dev/sda1", "/", "ext4", MS_REMOUNT, NULL) == -1) {
-    panic("mount /");
-  }
-
-  pid_t pid = -1;
-  pid = fork();
-  if (pid == 0) {
-    return serial_login();
-  }
-
-  pid = fork();
-  if (pid == 0) {
-    execl("/bin/sh", "/bin/sh", "/etc/start_net", NULL);
-  } else {
-    int wstatus = 0;
-    waitpid(pid, &wstatus, 0);
-    if (wstatus != 0) {
-      fprintf(stderr, "start_net failed with status %d\n", wstatus);
-    }
-  }
-
-  pid = fork();
-  if (pid == 0) {
+  if (fork() == 0) {
     execl("/usr/sbin/shelld", "/usr/sbin/shelld", "0.0.0.0", "8888", NULL);
+    perror("exec shelld");
+    return -1;
   }
 
-  system_control();
+  console_login();
 
   shutdown();
+
   return 0;
 }
