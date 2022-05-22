@@ -6,6 +6,7 @@ build: build_dir build/usr/sbin/init build/bin/sh \
 rawdisk: build
 	sudo mount /dev/loop0p1 /home/matt/newsys; \
 		sudo cp -R /home/matt/yip_linux/build/* /home/matt/newsys; \
+		sleep 1; \
 		sudo umount /home/matt/newsys
 
 .PHONY: vmdk

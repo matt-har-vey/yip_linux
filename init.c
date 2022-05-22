@@ -21,11 +21,13 @@
 #define REBOOT_CMD_HALT 0xcdef0123
 #define REBOOT_CMD_POWEROFF 0x4321fedc
 
-#define CONTROL_TTY "/dev/tty0"
+#define CONTROL_TTY "/dev/hvc0"
+#define CONSOLE_TTY "/dev/hvc1"
 #define SERIAL_TTY "/dev/ttyS0"
 
 void panic(const char *context) {
   fprintf(stderr, "init panic (context=\"%s\", errno=%d)\n", context, errno);
+  perror("init panic");
   while (1) {
     sleep(10);
   }
@@ -55,32 +57,46 @@ void signal_handler(int sig_num) {
   }
 }
 
-void serial_login() {
+int serial_login() {
   prctl(PR_SET_NAME, (unsigned long)"serial_login", 0, 0, 0);
-  while (1) {
-    pid_t pid = fork();
-    if (pid == 0) {
-      int fd = open(SERIAL_TTY, O_RDWR);
-      login_tty(fd);
-      exec_shell(100, 1000, "/home/bellatrix");
-    } else {
-      int wstatus = 0;
-      waitpid(pid, &wstatus, 0);
+  int fd = open(SERIAL_TTY, O_RDWR);
+  if (fd == -1) {
+    return -1;
+  }
+  if (write(fd, "\r\n", 2) == -1) {
+    return -1;
+  }
+  pid_t pid = fork();
+  if (pid == 0) {
+    int login_result = login_tty(fd);
+    if (login_result == -1) {
+      return -1;
     }
+    while (1) {
+      pid = fork();
+      if (pid == 0) {
+        exec_shell(100, 1000, "/home/bellatrix");
+      } else {
+        int wstatus = 0;
+        waitpid(pid, &wstatus, 0);
+      }
+    }
+  } else {
+    int wstatus = 0;
+    waitpid(pid, &wstatus, 0);
+    return wstatus;
   }
 }
 
 void system_control() {
-  while (1) {
-    pid_t pid = fork();
-    if (pid == 0) {
-      int fd = open(CONTROL_TTY, O_RDWR);
-      login_tty(fd);
-      exec_shell(0, 0, "/root");
-    } else {
-      int wstatus = 0;
-      waitpid(pid, &wstatus, 0);
-    }
+  pid_t pid = fork();
+  if (pid == 0) {
+    int fd = open(CONTROL_TTY, O_RDWR);
+    login_tty(fd);
+    exec_shell(0, 0, "/root");
+  } else {
+    int wstatus = 0;
+    waitpid(pid, &wstatus, 0);
   }
 }
 
@@ -94,9 +110,6 @@ int main(int argc, char **argv) {
 
   sethostname(HOSTNAME, strlen(HOSTNAME));
 
-  if (mount("/dev/sda1", "/", "ext4", MS_REMOUNT, NULL) == -1) {
-    panic("mount /");
-  }
   if (mount("proc", "/proc", "proc", 0, NULL) == -1) {
     panic("mount /proc");
   }
@@ -106,15 +119,22 @@ int main(int argc, char **argv) {
   if (mount("tmpfs", "/run", "tmpfs", 0, NULL) == -1) {
     panic("mount /run");
   }
+  if (mount("tmpfs", "/tmp", "tmpfs", 0, NULL) == -1) {
+    panic("mount /tmp");
+  }
+  chmod("/tmp", 0777);
   mkdir("/dev/pts", 0755);
   if (mount("devpts", "/dev/pts", "devpts", 0, NULL) == -1) {
     panic("mount /dev/pts");
+  }
+  if (mount("/dev/sda1", "/", "ext4", MS_REMOUNT, NULL) == -1) {
+    panic("mount /");
   }
 
   pid_t pid = -1;
   pid = fork();
   if (pid == 0) {
-    serial_login();
+    return serial_login();
   }
 
   pid = fork();
@@ -135,6 +155,6 @@ int main(int argc, char **argv) {
 
   system_control();
 
-  panic("unexpected exit");
-  return -1;
+  shutdown();
+  return 0;
 }
