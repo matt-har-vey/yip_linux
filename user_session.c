@@ -4,17 +4,17 @@
 #include <poll.h>
 #include <pty.h>
 #include <pwd.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "exec_shell.h"
-
-#define BUF_SIZE 1024
+#define BUF_SIZE 4096
 
 static void set_nonblocking(int fd) {
   int flags = fcntl(fd, F_GETFL);
@@ -78,46 +78,71 @@ static int bridge_fds(int fd_0, int fd_1) {
   return 0;
 }
 
-int user_session(int conn_fd) {
-  if (setsid() == -1) {
-    close(conn_fd);
-    return -1;
+static char* read_line(char* buf, size_t size) {
+  memset(buf, 0, size);
+  if (fgets(buf, size, stdin) == NULL) {
+    return NULL;
   }
-
-  FILE *conn = fdopen(conn_fd, "r+");
-  if (conn == NULL) {
-    close(conn_fd);
-    return -1;
-  }
-  setbuf(conn, NULL);
-
-  fprintf(conn, "login: ");
-
-  char username[100];
-  memset(username, 0, sizeof(username));
-  for (size_t pos = 0;; ++pos) {
-    if (pos == sizeof(username)) {
-      fprintf(conn, "username overflow\n");
-      fclose(conn);
-      return -1;
-    }
-    const char c = getc(conn);
+  for (ptrdiff_t pos = 0; pos < size; ++pos) {
+    const char c = buf[pos];
     if (c == '\r' || c == '\n' || c == 0) {
-      username[pos] = 0;
-      fprintf(conn, "\r\n");
+      buf[pos] = 0;
       break;
     }
-    putc(c, conn);
-    username[pos] = c;
+  }
+  return buf;
+}
+
+static void exec_shell(int uid, int gid, const char *home_dir) {
+  setsid();
+  setgid(gid);
+  setuid(uid);
+  setenv("HOME", home_dir, 1);
+  chdir(home_dir);
+  const char bin_sh[] = "/bin/sh";
+  const char zsh[] = "/usr/local/bin/zsh";
+  struct stat statbuf;
+  if (stat(zsh, &statbuf) == 0) {
+    execl(zsh, "zsh", (char *)NULL);
+  } else {
+    execl(bin_sh, "sh", (char *)NULL);
+  }
+}
+
+static int login(const char* chown_path) {
+  printf("login: ");
+  fflush(stdout);
+
+  char buf[16];
+  const char* username = read_line(buf, sizeof(buf));
+  if (username == NULL) {
+    fprintf(stderr, "read failed\n");
+    return -1;
   }
 
   const struct passwd *pwnam = getpwnam(username);
-  if (pwnam == NULL || setgid(pwnam->pw_gid) || setuid(pwnam->pw_uid)) {
-    fprintf(conn, "unknown login\r\n");
-    fclose(conn);
+  if (pwnam == NULL) {
+    fprintf(stderr, "unknown login\n");
     return -1;
   }
 
+  if (chown_path != NULL) {
+    chown(chown_path, pwnam->pw_uid, pwnam->pw_gid);
+  }
+
+  if (setgid(pwnam->pw_gid) || setuid(pwnam->pw_uid)) {
+    fprintf(stderr, "setuid failed\n");
+    return -1;
+  }
+
+  exec_shell(pwnam->pw_uid, pwnam->pw_gid, pwnam->pw_dir);
+  return -1;
+}
+
+int user_session(int conn_fd) {
+  if (setsid() == -1) {
+    return -1;
+  }
   if (isatty(conn_fd)) {
     const pid_t cpid = fork();
     if (cpid == 0) {
@@ -127,27 +152,25 @@ int user_session(int conn_fd) {
       dup(conn_fd);
       dup(conn_fd);
       dup(conn_fd);
-      exec_shell(pwnam->pw_uid, pwnam->pw_gid, pwnam->pw_dir);
-      return -1;
+      return login(NULL);
     } else {
       int status = -1;
       waitpid(cpid, &status, 0);
     }
   } else {
     int tty_fd = -1;
-    const pid_t cpid = forkpty(&tty_fd, NULL, NULL, NULL);
+    char pty_path[16];
+    memset(pty_path, 0, sizeof(pty_path));
+    const pid_t cpid = forkpty(&tty_fd, pty_path, NULL, NULL);
     if (cpid == -1) {
-      fprintf(conn, "forkpty failed\r\n");
-    } else if (cpid == 0) {
-      fclose(conn);
-      exec_shell(pwnam->pw_uid, pwnam->pw_gid, pwnam->pw_dir);
       return -1;
+    } else if (cpid == 0) {
+      close(conn_fd);
+      return login(pty_path);
     } else {
       bridge_fds(tty_fd, conn_fd);
       close(tty_fd);
     }
   }
-
-  fclose(conn);
   return 0;
 }

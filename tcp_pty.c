@@ -54,7 +54,7 @@ static int resolve_and_bind(const char *address, const char *protocol) {
 
 int main(int argc, char **argv) {
   if (argc < 3) {
-    fprintf(stderr, "usage: shelld <address> <port>\n");
+    fprintf(stderr, "usage: tcp_pty <address> <port>\n");
   }
 
   // Reaps zombie closed connection handlers.

@@ -74,7 +74,7 @@ void startup() {
 
   pid_t pid = fork();
   if (pid == 0) {
-    execl("/bin/sh", "/bin/sh", "/etc/start_net", NULL);
+    execl("/bin/sh", "sh", "/etc/start_net", NULL);
   } else {
     int wstatus = 0;
     waitpid(pid, &wstatus, 0);
@@ -122,8 +122,8 @@ int main(int argc, char **argv) {
   startup();
 
   if (fork() == 0) {
-    execl("/usr/sbin/shelld", "/usr/sbin/shelld", "0.0.0.0", "8888", NULL);
-    perror("exec shelld");
+    execl("/usr/sbin/tcp_pty", "tcp_pty", "0.0.0.0", "8888", NULL);
+    perror("exec tcp_pty");
     return -1;
   }
 

@@ -1,6 +1,6 @@
 .PHONY: build
 build: build_dir build/usr/sbin/init build/bin/sh \
-	build/bin/mount build/usr/sbin/shelld
+	build/usr/sbin/tcp_pty
 
 .PHONY: rawdisk
 rawdisk: build
@@ -21,17 +21,14 @@ build_dir:
 
 CC=musl-gcc
 
-exec_shell.o: exec_shell.h exec_shell.c
-	$(CC) -o exec_shell.o -c exec_shell.c
-
 user_session.o: user_session.h user_session.c
 	$(CC) -o user_session.o -c user_session.c
 
-build/usr/sbin/init: init.c exec_shell.o user_session.o
-	$(CC) -o build/usr/sbin/init init.c exec_shell.o user_session.o --static
+build/usr/sbin/init: init.c user_session.o
+	$(CC) -o build/usr/sbin/init init.c user_session.o --static
 
-build/usr/sbin/shelld: shelld.c exec_shell.o user_session.o
-	$(CC) -o build/usr/sbin/shelld shelld.c exec_shell.o user_session.o --static
+build/usr/sbin/tcp_pty: tcp_pty.c user_session.o
+	$(CC) -o build/usr/sbin/tcp_pty tcp_pty.c user_session.o --static
 
 build/bin/sh: sh.c
 	$(CC) -o build/bin/sh sh.c --static
