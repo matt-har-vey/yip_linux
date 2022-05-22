@@ -10,6 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <sys/prctl.h>
 #include <sys/socket.h>
 
 #define BUF_SIZE 4096
@@ -148,16 +149,18 @@ int main(int argc, char **argv) {
       continue;
     }
 
-    int tty_fd = -1;
-    char pty_path[16];
-    memset(pty_path, 0, sizeof(pty_path));
-    const pid_t cpid = forkpty(&tty_fd, pty_path, NULL, NULL);
-    if (cpid == 0) {
-      close(conn_fd);
-      execl("/usr/bin/login", "login", NULL);
-    } else if (cpid > 0) {
-      bridge_fds(tty_fd, conn_fd);
-      close(tty_fd);
+    if (fork() == 0) {
+      int tty_fd = -1;
+      char pty_path[16];
+      memset(pty_path, 0, sizeof(pty_path));
+      const pid_t cpid = forkpty(&tty_fd, pty_path, NULL, NULL);
+      if (cpid == 0) {
+        close(conn_fd);
+        execl("/usr/bin/login", "login", NULL);
+      } else if (cpid > 0) {
+        bridge_fds(tty_fd, conn_fd);
+        close(tty_fd);
+      }
     }
 
     close(conn_fd);
