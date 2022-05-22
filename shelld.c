@@ -135,7 +135,7 @@ int user_session(int conn_fd) {
     return -1;
   }
 
-  FILE* conn = fdopen(conn_fd, "r+");
+  FILE *conn = fdopen(conn_fd, "r+");
   if (conn == NULL) {
     return -1;
   }
@@ -159,7 +159,7 @@ int user_session(int conn_fd) {
     username[pos] = c;
   }
 
-  const struct passwd* pwnam = getpwnam(username);
+  const struct passwd *pwnam = getpwnam(username);
   if (pwnam == NULL || setgid(pwnam->pw_gid) || setuid(pwnam->pw_uid)) {
     fprintf(conn, "unknown login\r\n");
     fclose(conn);
