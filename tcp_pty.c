@@ -3,14 +3,15 @@
 #include <netdb.h>
 #include <poll.h>
 #include <pty.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <utmp.h>
 
 #include <sys/socket.h>
+#include <sys/types.h>
 
 #define BUF_SIZE 4096
 
@@ -84,7 +85,7 @@ static int bridge_fds(int fd_0, int fd_1) {
   if (buf == NULL) {
     return -1;
   }
-  while (1) {
+  while (true) {
     if (poll(poll_fds, 2, -1) == -1) {
       break;
     }
@@ -121,12 +122,6 @@ int main(int argc, char **argv) {
   const char kHost[] = "0.0.0.0";
   const char kPort[] = "8888";
 
-  // Reaps zombie closed connection handlers.
-  if (signal(SIGCHLD, SIG_IGN) == SIG_ERR) {
-    perror("signal");
-    return -1;
-  }
-
   int sock_fd = resolve_and_bind(kHost, kPort);
   if (sock_fd == -1) {
     fprintf(stderr, "bind failed\n");
@@ -159,24 +154,26 @@ int main(int argc, char **argv) {
       }
       const pid_t pid = fork();
       if (pid == 0) {
-        close(conn_fd);
-        close(sock_fd);
-        close(0);
-        close(1);
-        close(2);
-        dup(pts);
-        dup(pts);
-        dup(pts);
-        execl("/usr/bin/login", "login", NULL);
-      } else if (pid > 0) {
-        bridge_fds(ptmx, conn_fd);
         close(ptmx);
         close(conn_fd);
+        close(sock_fd);
+        if (login_tty(pts) == -1) {
+          perror("login_tty");
+          return -1;
+        }
+        execl("/usr/bin/login", "login", NULL);
+      } else {
+        close(pts);
+        if (pid > 0) {
+          bridge_fds(ptmx, conn_fd);
+        }
+        close(conn_fd);
+        close(sock_fd);
+        return 0;
       }
-      break;
+    } else {
+      close(conn_fd);
     }
-
-    close(conn_fd);
   }
 
   close(sock_fd);

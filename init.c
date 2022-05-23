@@ -112,7 +112,7 @@ void shutdown() {
 }
 
 void run_console() {
-  int tty = open(CONTROL_TTY, O_RDWR | O_SYNC);
+  int tty = open(CONTROL_TTY, O_RDWR);
   if (login_tty(tty) == -1) {
     panic("console login_tty");
     return;
