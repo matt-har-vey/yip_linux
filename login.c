@@ -1,3 +1,4 @@
+#include <libgen.h>
 #include <pwd.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -23,11 +24,6 @@ static char *read_line(char *buf, size_t size) {
 }
 
 int main(int argc, char **argv) {
-  if (setsid() == -1) {
-    fprintf(stderr, "setsid failed\n");
-    return -1;
-  }
-
   printf("login: ");
   fflush(stdout);
 
@@ -56,13 +52,8 @@ int main(int argc, char **argv) {
 
   setenv("HOME", pwnam->pw_dir, 1);
   chdir(pwnam->pw_dir);
-  const char bin_sh[] = "/bin/sh";
-  const char zsh[] = "/usr/local/bin/zsh";
-  struct stat statbuf;
-  if (stat(zsh, &statbuf) == 0) {
-    execl(zsh, "zsh", (char *)NULL);
-  } else {
-    execl(bin_sh, "sh", (char *)NULL);
-  }
+  const char *shell = pwnam->pw_shell;
+  char *shell_dup = strdup(shell);
+  execl(shell, basename(shell_dup), (char *)NULL);
   return -1;
 }
