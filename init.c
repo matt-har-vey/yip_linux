@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,8 +38,6 @@ static const struct mount_spec specs[] = {
     {.source = "devpts", .target = "/dev/pts", .type = "devpts"},
     {.source = NULL, .target = NULL, .type = NULL}};
 
-void signal_handler(int sig_num);
-
 void panic(const char *context) {
   fprintf(stderr, "init panic (context=\"%s\", errno=%d)\n", context, errno);
   perror("init panic");
@@ -47,11 +46,19 @@ void panic(const char *context) {
   }
 }
 
+void shutdown();
+
+void handle_sigterm(int sig_num) {
+  if (sig_num == SIGTERM) {
+    shutdown();
+  }
+}
+
 void startup() {
   if (signal(SIGCHLD, SIG_IGN) == SIG_ERR) {
     panic("installing SIGCHLD");
   }
-  if (signal(SIGTERM, signal_handler) == SIG_ERR) {
+  if (signal(SIGTERM, handle_sigterm) == SIG_ERR) {
     panic("installing SIGTERM");
   }
 
@@ -104,29 +111,21 @@ void shutdown() {
   }
 }
 
-void signal_handler(int sig_num) {
-  if (sig_num == SIGTERM) {
-    shutdown();
-    panic("lived past shutdown");
+void run_console() {
+  int tty = open(CONTROL_TTY, O_RDWR | O_SYNC);
+  if (login_tty(tty) == -1) {
+    panic("console login_tty");
+    return;
   }
-}
-
-int console_login() {
-  int fd = open(CONTROL_TTY, O_RDWR | O_SYNC);
-  const pid_t pid = fork();
-  if (pid == 0) {
-    close(0);
-    close(1);
-    close(2);
-    dup(fd);
-    dup(fd);
-    dup(fd);
-    execl("/usr/bin/login", "login", NULL);
-  } else {
-    int status = -1;
-    waitpid(pid, &status, 0);
-    return status;
+  while (true) {
+    pid_t pid = fork();
+    if (pid == 0) {
+      execl("/usr/bin/login", "login", NULL);
+    } else {
+      waitpid(pid, NULL, 0);
+    }
   }
+  close(tty);
 }
 
 int main(int argc, char **argv) {
@@ -138,9 +137,8 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  console_login();
+  run_console();
 
-  shutdown();
-
+  panic("console exited");
   return 0;
 }
