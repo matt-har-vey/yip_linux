@@ -22,23 +22,12 @@ static char *read_line(char *buf, size_t size) {
   return buf;
 }
 
-static void exec_shell(int uid, int gid, const char *home_dir) {
-  setsid();
-  setgid(gid);
-  setuid(uid);
-  setenv("HOME", home_dir, 1);
-  chdir(home_dir);
-  const char bin_sh[] = "/bin/sh";
-  const char zsh[] = "/usr/local/bin/zsh";
-  struct stat statbuf;
-  if (stat(zsh, &statbuf) == 0) {
-    execl(zsh, "zsh", (char *)NULL);
-  } else {
-    execl(bin_sh, "sh", (char *)NULL);
-  }
-}
-
 int main(int argc, char **argv) {
+  if (setsid() == -1) {
+    fprintf(stderr, "setsid failed\n");
+    return -1;
+  }
+
   printf("login: ");
   fflush(stdout);
 
@@ -65,6 +54,15 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  exec_shell(pwnam->pw_uid, pwnam->pw_gid, pwnam->pw_dir);
+  setenv("HOME", pwnam->pw_dir, 1);
+  chdir(pwnam->pw_dir);
+  const char bin_sh[] = "/bin/sh";
+  const char zsh[] = "/usr/local/bin/zsh";
+  struct stat statbuf;
+  if (stat(zsh, &statbuf) == 0) {
+    execl(zsh, "zsh", (char *)NULL);
+  } else {
+    execl(bin_sh, "sh", (char *)NULL);
+  }
   return -1;
 }
