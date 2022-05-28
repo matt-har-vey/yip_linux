@@ -72,14 +72,16 @@ static void wait_to_write(int fd) {
 
 static int bridge_fds(int fd_0, int fd_1) {
   const int closed_flags = POLLNVAL | POLLERR | POLLHUP;
+
+  set_nonblocking(fd_0);
+  set_nonblocking(fd_1);
+
   struct pollfd poll_fds[2];
   memset(poll_fds, 0, sizeof(poll_fds));
   poll_fds[0].fd = fd_0;
   poll_fds[0].events = POLLIN;
   poll_fds[1].fd = fd_1;
   poll_fds[1].events = POLLIN;
-  set_nonblocking(fd_0);
-  set_nonblocking(fd_1);
 
   void *buf = malloc(BUF_SIZE);
   if (buf == NULL) {
@@ -167,6 +169,7 @@ int main(int argc, char **argv) {
         if (pid > 0) {
           bridge_fds(ptmx, conn_fd);
         }
+        close(ptmx);
         close(conn_fd);
         close(sock_fd);
         return 0;
