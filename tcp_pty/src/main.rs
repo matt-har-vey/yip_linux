@@ -38,7 +38,10 @@ impl From<Errno> for ExecError {
 }
 
 fn exec_login() -> Result<(), ExecError> {
-    nix::unistd::execv(&CString::new("/usr/bin/login")?, &[CString::new("login")?])?;
+    nix::unistd::execv(
+        &CString::new("/usr/bin/login")?,
+        &[CString::new("login")?],
+    )?;
     Ok(())
 }
 
@@ -56,10 +59,16 @@ async fn process(mut socket: TcpStream) {
                 //     println!("set_nonblocking error: {:?}", e);
                 //     return;
                 // }
-                let mut ptmx = unsafe { tokio::fs::File::from_raw_fd(pty.master) };
-                match tokio::io::copy_bidirectional(&mut ptmx, &mut socket).await {
+                let mut ptmx =
+                    unsafe { tokio::fs::File::from_raw_fd(pty.master) };
+                match tokio::io::copy_bidirectional(&mut ptmx, &mut socket)
+                    .await
+                {
                     Ok((sent, received)) => {
-                        println!("{} bytes sent; {} bytes received", sent, received);
+                        println!(
+                            "{} bytes sent; {} bytes received",
+                            sent, received
+                        );
                     }
                     Err(e) => {
                         println!("channel error: {:?}", e);
@@ -72,7 +81,7 @@ async fn process(mut socket: TcpStream) {
     }
 }
 
-#[tokio::main(flavor="current_thread")]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("0.0.0.0:8889").await?;
 
