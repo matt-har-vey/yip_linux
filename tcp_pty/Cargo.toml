@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+exec = "0.3.1"
 nix = "0.24.1"
 tokio = { version = "1.18.2", features = ["full"] }
