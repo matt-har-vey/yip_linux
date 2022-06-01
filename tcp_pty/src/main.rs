@@ -1,15 +1,16 @@
 use nix::unistd::ForkResult;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::prelude::RawFd;
-use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 
 use futures::ready;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::Context;
+use std::task::Poll;
 use tokio::io::unix::AsyncFd;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
+use tokio::net::TcpStream;
 
 fn set_nonblocking(fd: RawFd) -> Result<(), nix::Error> {
     let bits = nix::fcntl::fcntl(fd, nix::fcntl::FcntlArg::F_GETFL)?;
@@ -19,11 +20,11 @@ fn set_nonblocking(fd: RawFd) -> Result<(), nix::Error> {
     Ok(())
 }
 
-pub struct AsyncPty {
+pub struct AsyncNixFd {
     fd: AsyncFd<RawFd>,
 }
 
-impl AsyncPty {
+impl AsyncNixFd {
     pub fn new(fd: RawFd) -> std::io::Result<Self> {
         set_nonblocking(fd)?;
         Ok(Self {
@@ -32,7 +33,7 @@ impl AsyncPty {
     }
 }
 
-impl AsyncRead for AsyncPty {
+impl AsyncRead for AsyncNixFd {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -56,7 +57,7 @@ impl AsyncRead for AsyncPty {
     }
 }
 
-impl AsyncWrite for AsyncPty {
+impl AsyncWrite for AsyncNixFd {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -89,32 +90,42 @@ impl AsyncWrite for AsyncPty {
     }
 }
 
-impl Drop for AsyncPty {
+impl Drop for AsyncNixFd {
     fn drop(&mut self) {
         let _ = nix::unistd::close(self.fd.as_raw_fd());
     }
 }
 
-async fn remote_control(
-    master: RawFd,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let listener = TcpListener::bind("0.0.0.0:8888").await?;
-    let (mut socket, _) = listener.accept().await?;
-    let mut ptmx = AsyncPty::new(master)?;
-    ptmx.write_all("import os\ndir()\n".as_bytes()).await?;
-    tokio::io::copy_bidirectional(&mut ptmx, &mut socket).await?;
-    Ok(())
+fn forkpty() -> Result<nix::pty::ForkptyResult, nix::Error> {
+    unsafe { nix::pty::forkpty(None, None) }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let pty = unsafe { nix::pty::forkpty(None, None) }?;
-    match pty.fork_result {
-        ForkResult::Child => {
-            return Err(Box::new(exec::Command::new("ipython").exec()));
-        }
-        ForkResult::Parent { child: _ } => {
-            let rt = tokio::runtime::Runtime::new()?;
-            return rt.block_on(remote_control(pty.master));
-        }
+async fn process(mut socket: TcpStream) {
+    match forkpty() {
+        Ok(pty) => match pty.fork_result {
+            ForkResult::Child => {
+                let _ = exec::Command::new("/usr/bin/login").exec();
+            }
+            ForkResult::Parent { child } => {
+                let mut ptmx = AsyncNixFd::new(pty.master).unwrap();
+                let _ =
+                    tokio::io::copy_bidirectional(&mut ptmx, &mut socket).await;
+                let _ = nix::sys::wait::waitpid(child, None);
+            }
+        },
+        Err(e) => println!("forkpty failed; err = {:?}", e),
+    }
+}
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind("0.0.0.0:8888").await?;
+
+    loop {
+        let (socket, _) = listener.accept().await?;
+
+        tokio::spawn(async move {
+            process(socket).await;
+        });
     }
 }
