@@ -12,6 +12,7 @@ rawdisk: build
 .PHONY: clean
 clean:
 	rm -rf build *.o
+	cd tcp_pty; cargo clean
 
 .PHONY: build_dir
 build_dir:
@@ -23,8 +24,10 @@ CC=musl-gcc
 build/usr/sbin/init: init.c
 	$(CC) -o build/usr/sbin/init init.c
 
-build/usr/sbin/tcp_pty: tcp_pty.c
-	$(CC) -o build/usr/sbin/tcp_pty tcp_pty.c
+build/usr/sbin/tcp_pty: tcp_pty/src/main.rs tcp_pty/Cargo.toml
+	cd tcp_pty; cargo build -r
+	cp tcp_pty/target/x86_64-unknown-linux-musl/release/tcp_pty \
+		build/usr/sbin/tcp_pty
 
 build/usr/bin/login: login.c
 	$(CC) -o build/usr/bin/login login.c
