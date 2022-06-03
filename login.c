@@ -1,12 +1,11 @@
 #include <libgen.h>
 #include <pwd.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#include <sys/stat.h>
 
 static char *read_line(char *buf, size_t size) {
   memset(buf, 0, size);
@@ -40,13 +39,17 @@ int main(int argc, char **argv) {
     return -1;
   }
 
+  bool permission_denied = false;
   if (fchown(0, pwnam->pw_uid, pwnam->pw_gid)) {
-    fprintf(stderr, "chown stdin\n");
-    return -1;
+    permission_denied = true;
   }
 
   if (setgid(pwnam->pw_gid) || setuid(pwnam->pw_uid)) {
-    fprintf(stderr, "setuid failed\n");
+    permission_denied = true;
+  }
+
+  if (permission_denied) {
+    fprintf(stderr, "permission denied\n");
     return -1;
   }
 
@@ -54,6 +57,12 @@ int main(int argc, char **argv) {
   chdir(pwnam->pw_dir);
   const char *shell = pwnam->pw_shell;
   char *shell_dup = strdup(shell);
-  execl(shell, basename(shell_dup), (char *)NULL);
+  if (shell_dup != NULL &&
+      execl(shell, basename(shell_dup), (char *)NULL) == -1) {
+    fprintf(stderr, "shell not found\n");
+  }
+  if (shell_dup != NULL) {
+    free(shell_dup);
+  }
   return -1;
 }
