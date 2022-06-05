@@ -17,12 +17,10 @@
 
 #define HOSTNAME "paddock"
 
-#define REBOOT_CMD_HALT 0xcdef0123
 #define REBOOT_CMD_POWEROFF 0x4321fedc
+#define REBOOT_CMD_RESTART 0x1234567
 
 #define CONTROL_TTY "/dev/hvc0"
-#define CONSOLE_TTY "/dev/hvc1"
-#define SERIAL_TTY "/dev/ttyS0"
 
 struct mount_spec {
   const char *source;
@@ -55,9 +53,6 @@ void handle_sigterm(int sig_num) {
 }
 
 void startup() {
-  if (signal(SIGCHLD, SIG_IGN) == SIG_ERR) {
-    panic("installing SIGCHLD");
-  }
   if (signal(SIGTERM, handle_sigterm) == SIG_ERR) {
     panic("installing SIGTERM");
   }
@@ -104,11 +99,13 @@ void shutdown() {
   }
   sync();
 
-  if (getenv("YIP_NOREBOOT") == NULL) {
-    if (reboot(REBOOT_CMD_HALT) != 0) {
-      panic("reboot");
-    }
+  if (getenv("YIP_REBOOT") != NULL) {
+    reboot(REBOOT_CMD_RESTART);
+  } else {
+    reboot(REBOOT_CMD_POWEROFF);
   }
+
+  panic("post reboot");
 }
 
 void run_console() {
@@ -122,7 +119,7 @@ void run_console() {
     if (pid == 0) {
       execl("/usr/bin/login", "login", NULL);
     } else {
-      waitpid(pid, NULL, 0);
+      for (pid_t wait_pid = -1; wait_pid != pid; wait_pid = wait(NULL)) {}
     }
   }
   close(tty);
@@ -139,6 +136,6 @@ int main(int argc, char **argv) {
 
   run_console();
 
-  panic("console exited");
+  panic("run_console returned");
   return 0;
 }

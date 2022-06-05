@@ -38,16 +38,13 @@ int main(int argc, char **argv) {
     fprintf(stderr, "unknown login\n");
     return -1;
   }
-
   bool permission_denied = false;
   if (fchown(0, pwnam->pw_uid, pwnam->pw_gid)) {
     permission_denied = true;
   }
-
   if (setgid(pwnam->pw_gid) || setuid(pwnam->pw_uid)) {
     permission_denied = true;
   }
-
   if (permission_denied) {
     fprintf(stderr, "permission denied\n");
     return -1;
@@ -55,14 +52,13 @@ int main(int argc, char **argv) {
 
   setenv("HOME", pwnam->pw_dir, 1);
   chdir(pwnam->pw_dir);
-  const char *shell = pwnam->pw_shell;
-  char *shell_dup = strdup(shell);
-  if (shell_dup != NULL &&
-      execl(shell, basename(shell_dup), (char *)NULL) == -1) {
+  char *shell = strdup(pwnam->pw_shell);
+  if (shell != NULL &&
+      execl(shell, basename(shell), (char *)NULL) == -1) {
     fprintf(stderr, "shell not found\n");
   }
-  if (shell_dup != NULL) {
-    free(shell_dup);
+  if (shell != NULL) {
+    free(shell);
   }
   return -1;
 }
