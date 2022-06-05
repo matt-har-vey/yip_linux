@@ -1,0 +1,9 @@
+[package]
+name = "init"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nix = "0.24.1"
+signal-hook = "0.3.14"
+sys-mount = "1.5.1"

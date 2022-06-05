@@ -21,13 +21,15 @@ build_dir:
 
 CC=musl-gcc
 
-build/usr/sbin/init: init.c
-	$(CC) -o build/usr/sbin/init init.c
-
 build/usr/sbin/tcp_pty: tcp_pty/src/main.rs tcp_pty/Cargo.toml
 	cd tcp_pty; cargo build -r
 	cp tcp_pty/target/x86_64-unknown-linux-musl/release/tcp_pty \
 		build/usr/sbin/tcp_pty
+
+build/usr/sbin/init: init/src/main.rs init/Cargo.toml
+	cd init; cargo build -r
+	cp init/target/x86_64-unknown-linux-musl/release/init \
+		build/usr/sbin/init
 
 build/usr/bin/login: login.c
 	$(CC) -o build/usr/bin/login login.c
