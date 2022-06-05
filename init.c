@@ -46,14 +46,8 @@ void panic(const char *context) {
 
 void shutdown();
 
-void handle_sigterm(int sig_num) {
-  if (sig_num == SIGTERM) {
-    shutdown();
-  }
-}
-
 void startup() {
-  if (signal(SIGTERM, handle_sigterm) == SIG_ERR) {
+  if (signal(SIGTERM, shutdown) == SIG_ERR) {
     panic("installing SIGTERM");
   }
 
@@ -136,6 +130,6 @@ int main(int argc, char **argv) {
 
   run_console();
 
-  panic("run_console returned");
+  panic("post run_console");
   return 0;
 }
